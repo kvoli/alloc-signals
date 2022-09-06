@@ -185,4 +185,109 @@ roachprod extend $email --lifetime=30h
 export email=austen-kv95-capped-cpu
 roachprod extend $email --lifetime=30h
 
+# 7n n7 overload cpu 
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpu
+setopt +o nomatch
+roachprod create $email -n 8 --gce-machine-type=n1-standard-8
+roachprod extend $email --lifetime=40h
+roachprod stage $email cockroach 4f0065ad010cee1ce50bbc65019b26f93a7dc6ad
+roachprod start $email:1-6
+roachprod start $email:7 --args "--attrs=hotcpu"
+
+roachprod grafana-start $email --grafana-config=https://gist.githubusercontent.com/kvoli/7d001b33240bd8a1e1d1e8614b80163f/raw/5a993f4f5ca56cfd58567246395a68a97b206444/dashboard.json
+
+roachprod adminui $email:1
+roachprod run $email:8 -- './cockroach workload init kv --db=kvcpu {pgurl:1} '
+roachprod run $email:8 -- './cockroach workload init kv --splits=3000 {pgurl:1} '
+roachprod sql $email:1 -- -e "alter database kvcpu configure zone using num_replicas=1, constraints='[+hotcpu]', lease_preferences='[[+hotcpu]]';"
+
+# n7 load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpu
+roachprod run $email:8 -- './cockroach workload run kv --db=kvcpu --read-percent=85 --min-block-bytes=1024 --max-block-bytes=1024 --batch=50 --span-percent=10  --tolerate-errors --concurrency=2048 --duration=180m --max-rate=75 {pgurl:7}'
+
+# wide load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpu
+setopt +o nomatch
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=95 --min-block-bytes=256 --max-block-bytes=256  --duration=120m --tolerate-errors --concurrency=4096 --duration=15m --max-rate=14000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=95 --min-block-bytes=256 --max-block-bytes=256  --duration=120m --tolerate-errors --concurrency=4096 --duration=15m --max-rate=18000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=95 --min-block-bytes=256 --max-block-bytes=256  --duration=120m --tolerate-errors --concurrency=4096 --duration=15m --max-rate=22000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=95 --min-block-bytes=256 --max-block-bytes=256  --duration=120m --tolerate-errors --concurrency=4096 --duration=15m --max-rate=26000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=95 --min-block-bytes=256 --max-block-bytes=256  --duration=120m --tolerate-errors --concurrency=4096 --duration=120m --max-rate=30000 {pgurl:1-7}'
+
+
+
+# 7n n7 overload write
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-write
+roachprod create $email -n 8 --gce-machine-type=n1-standard-8
+roachprod extend $email --lifetime=40h
+roachprod stage $email cockroach 4f0065ad010cee1ce50bbc65019b26f93a7dc6ad
+roachprod start $email:1-6
+roachprod start $email:7 --args "--attrs=hotwrite"
+
+roachprod grafana-start $email --grafana-config=https://gist.githubusercontent.com/kvoli/7d001b33240bd8a1e1d1e8614b80163f/raw/5a993f4f5ca56cfd58567246395a68a97b206444/dashboard.json
+
+roachprod adminui $email:1
+roachprod run $email:8 -- './cockroach workload init kv --db=kvwrite {pgurl:1} '
+roachprod run $email:8 -- './cockroach workload init kv --splits=3000 {pgurl:1} '
+roachprod sql $email:1 -- -e "alter database kvwrite configure zone using num_replicas=1, constraints='[+hotwrite]', lease_preferences='[[+hotwrite]]';"
+
+# n7 load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-write
+roachprod run $email:8 -- './cockroach workload run kv --db=kvwrite --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536 --tolerate-errors --concurrency=4096 --duration=180m  --max-rate=150 {pgurl:6}'
+
+# wide load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-write
+setopt +o nomatch
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536  --tolerate-errors --concurrency=4096 --duration=15m --max-rate=200 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536  --tolerate-errors --concurrency=4096 --duration=15m --max-rate=250 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536  --tolerate-errors --concurrency=4096 --duration=15m --max-rate=300 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536  --tolerate-errors --concurrency=4096 --duration=15m --max-rate=350 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536  --tolerate-errors --concurrency=4096 --duration=120m --max-rate=400 {pgurl:1-7}'
+
+
+### 7n n7 overload cpu, n6 overload write
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpuwrite
+setopt +o nomatch
+roachprod create $email -n 8 --gce-machine-type=n1-standard-8
+roachprod extend $email --lifetime=40h
+roachprod stage $email cockroach 4f0065ad010cee1ce50bbc65019b26f93a7dc6ad
+roachprod start $email:1-5
+roachprod start $email:6 --args "--attrs=hotwrite"
+roachprod start $email:7 --args "--attrs=hotcpu"
+
+roachprod grafana-start $email --grafana-config=https://gist.githubusercontent.com/kvoli/7d001b33240bd8a1e1d1e8614b80163f/raw/5a993f4f5ca56cfd58567246395a68a97b206444/dashboard.json
+
+roachprod adminui $email:1
+roachprod run $email:8 -- './cockroach workload init kv --db=kvcpu {pgurl:1} '
+roachprod run $email:8 -- './cockroach workload init kv --db=kvwrite {pgurl:1} '
+roachprod run $email:8 -- './cockroach workload init kv --splits=3000 {pgurl:1} '
+roachprod sql $email:1 -- -e "alter database kvcpu configure zone using num_replicas=1, constraints='[+hotcpu]', lease_preferences='[[+hotcpu]]';"
+roachprod sql $email:1 -- -e "alter database kvwrite configure zone using num_replicas=1, constraints='[+hotwrite]', lease_preferences='[[+hotwrite]]';"
+
+# n7 (cpu) load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpuwrite
+roachprod run $email:8 -- './cockroach workload run kv --db=kvcpu --read-percent=85 --min-block-bytes=1024 --max-block-bytes=1024 --batch=50 --span-percent=10  --tolerate-errors --concurrency=2048 --duration=180m --max-rate=75 {pgurl:7}'
+
+# n6 (write) load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpuwrite
+roachprod run $email:8 -- './cockroach workload run kv --db=kvwrite --read-percent=0 --min-block-bytes=65536 --max-block-bytes=65536 --tolerate-errors --concurrency=4096 --duration=180m  --max-rate=150 {pgurl:6}'
+
+# wide (cpu+write) load
+export gce_project=cockroach-ephemeral
+export email=austen-imbalance-cpuwrite
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=50 --min-block-bytes=6144 --max-block-bytes=6144  --tolerate-errors --concurrency=4096 --duration=15m  --max-rate=6000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=50 --min-block-bytes=6144 --max-block-bytes=6144  --tolerate-errors --concurrency=4096 --duration=15m  --max-rate=7500 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=50 --min-block-bytes=6144 --max-block-bytes=6144  --tolerate-errors --concurrency=4096 --duration=15m  --max-rate=9000 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=50 --min-block-bytes=6144 --max-block-bytes=6144  --tolerate-errors --concurrency=4096 --duration=15m  --max-rate=10500 {pgurl:1-7}'
+roachprod run $email:8 -- './cockroach workload run kv --db=kv --read-percent=50 --min-block-bytes=6144 --max-block-bytes=6144  --tolerate-errors --concurrency=4096 --duration=120m  --max-rate=12000 {pgurl:1-7}'
+
 ```
